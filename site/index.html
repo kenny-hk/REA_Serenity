@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="An independent, source-linked view of Serenity's public stock commentary. Daily mentions, sentiment, and stance history.">
+  <title>Serenity Watch · Follow the thesis</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+<header><a class="brand" href="./"><span class="mark">s</span> serenity<span class="light">watch</span></a><nav aria-label="Main navigation"><a href="#tracker">Tracker</a><a href="#methodology">Methodology</a><a href="https://github.com/kenny-hk/REA_Serenity">GitHub ↗</a></nav></header>
+<main>
+  <section class="hero"><div><p class="eyebrow">THE SIGNAL, WITH ITS SOURCES</p><h1>Follow the thesis.<br><span>See what changes.</span></h1><p class="intro">A daily lens on Serenity’s public stock commentary.<br>Track the mentions, follow the conviction, read the original.</p><a class="profile" href="https://x.com/aleabitoreddit" target="_blank" rel="noopener">↗ @aleabitoreddit on X</a></div><aside class="edition"><span class="orbit" aria-hidden="true">◎</span><p>INDEPENDENT RESEARCH INDEX</p><strong id="edition-date">Daily edition</strong><span>AI / Semiconductors / Supply chains</span></aside></section>
+  <div id="health" class="health" role="status">Loading collection status…</div>
+  <section id="tracker" aria-label="Stock sentiment tracker">
+    <div class="section-heading"><div><p class="eyebrow">THE WATCHLIST</p><h2>Serenity’s mentions</h2></div><p id="window-label">Dates in UTC</p></div>
+    <div class="toolbar"><div class="periods" role="group" aria-label="Time window"><button data-days="1" aria-pressed="true">Daily</button><button data-days="7" aria-pressed="false">Weekly <small>7D</small></button><button data-days="28" aria-pressed="false">Monthly <small>28D</small></button><button data-days="90" aria-pressed="false">Quarterly <small>90D</small></button></div><label class="date-label">Through <input type="date" id="date"></label></div>
+    <div class="stats" id="stats"></div>
+    <div class="filters"><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Search ticker or company" aria-label="Search ticker or company"></label><label>Stance <select id="stance"><option value="all">All stances</option><option value="bullish">Bullish</option><option value="bearish">Bearish</option><option value="neutral">Neutral</option><option value="unclassified">Unclassified</option></select></label><label>Sort <select id="sort"><option value="recent">Most recent</option><option value="mentions">Most mentioned</option><option value="ticker">Ticker A–Z</option></select></label><button class="export" id="export">Export CSV ↓</button></div>
+    <div class="table-wrap"><table><thead><tr><th>Company / ticker</th><th>Latest stance in window</th><th>Mentions</th><th>Latest commentary</th><th>Last mentioned</th></tr></thead><tbody id="rows"></tbody></table><div id="empty" class="empty" hidden></div></div>
+    <p class="footnote" id="result-count" aria-live="polite"></p>
+  </section>
+  <section class="methodology" id="methodology"><div><p class="eyebrow">CONTEXT MATTERS</p><h2>A record of commentary.<br>Always check the source.</h2><p>Independent fan project. Not affiliated with Serenity or Capafy. This is a research interface, not investment advice.</p></div><div class="method-grid"><article><span>01 / COLLECT</span><h3>Public posts, daily</h3><p>Scheduled collection at 08:17 Hong Kong time. History starts with the posts the source makes available; it is not a complete archive.</p></article><article><span>02 / INTERPRET</span><h3>One stock, one stance</h3><p>AI labels each mention separately. Neutral means factual commentary; unclassified means the stance is unclear. Labels can be wrong.</p></article><article><span>03 / VERIFY</span><h3>Evidence stays attached</h3><p>Open a stock to see its collected stance history, concise summaries, stated risks, and links to the original posts.</p></article><article><span>04 / KEEP PERSPECTIVE</span><h3>Coverage has limits</h3><p>Images, linked articles, and missing thread context are not analyzed. A mention does not establish a holding or recommendation.</p></article></div></section>
+</main>
+<footer><span>serenitywatch <span class="light">/ An open research notebook</span></span><a href="https://github.com/kenny-hk/REA_Serenity/actions">Collection history ↗</a></footer>
+<dialog id="detail"><div class="dialog-top"><p class="eyebrow">COLLECTED STANCE HISTORY</p><button id="close" aria-label="Close stock details">×</button></div><div id="detail-content"></div></dialog>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "account": "aleabitoreddit",
+  "status": "awaiting_configuration",
+  "last_success": null,
+  "last_attempt": null,
+  "since_id": null,
+  "coverage_start": null,
+  "posts_checked": 0,
+  "mentions": []
+}
