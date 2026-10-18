@@ -25,6 +25,8 @@ jobs:
           python-version: '3.12'
       - name: Test collection and validation
         run: python -m unittest discover -s tests -v
+      - name: Test dashboard logic
+        run: node tests/frontend.mjs
       - name: Collect public posts
         id: collect
         if: github.event_name != 'push'

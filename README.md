@@ -50,6 +50,7 @@ The cursor advances only after an entire selected batch validates. A failure lea
 - No guarantee of complete historical coverage, correct ticker identity, or perfect sentiment. Edited/deleted posts are not currently reconciled automatically; removal requests require an explicit data correction, including Git history if needed.
 - Daily rather than hourly collection, as requested. GitHub may delay schedules and may disable scheduled workflows in inactive public repositories; monitor Actions and freshness.
 - External feed/model calls have unit coverage with mocks but cannot be live-verified until credentials are configured.
+- Dashboard logic is tested with a lightweight DOM stub; visual/browser interaction QA was unavailable in the authoring session.
 
 ## Local development
 
