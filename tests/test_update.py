@@ -2,6 +2,7 @@ import copy
 import json
 from pathlib import Path
 import tempfile
+import subprocess
 import unittest
 from unittest.mock import patch
 from scripts import update
@@ -70,7 +71,7 @@ class PipelineTests(unittest.TestCase):
             path = Path(directory) / 'tracker.json'
             path.write_text(json.dumps(STATE))
             with patch.object(update, 'DATA', path), patch.dict(update.os.environ, {
-                'X_BEARER_TOKEN': 'test', 'ANTHROPIC_API_KEY': 'test', 'ANTHROPIC_MODEL': 'test'}), \
+                'X_BEARER_TOKEN': 'test', 'OPENAI_API_KEY': 'test', 'OPENAI_MODEL': 'test', 'CLASSIFIER_PROVIDER': 'openai'}), \
                 patch.object(update, 'fetch_posts', return_value=[POST]), \
                 patch.object(update, 'classify', side_effect=ValueError('bad evidence')):
                 self.assertEqual(update.main(), 1)
@@ -84,7 +85,7 @@ class PipelineTests(unittest.TestCase):
             path = Path(directory) / 'tracker.json'
             path.write_text(json.dumps(STATE))
             with patch.object(update, 'DATA', path), patch.dict(update.os.environ, {
-                'X_BEARER_TOKEN': 'test', 'ANTHROPIC_API_KEY': 'test', 'ANTHROPIC_MODEL': 'test', 'MAX_POSTS_PER_RUN': '1'}), \
+                'X_BEARER_TOKEN': 'test', 'OPENAI_API_KEY': 'test', 'OPENAI_MODEL': 'test', 'CLASSIFIER_PROVIDER': 'openai', 'MAX_POSTS_PER_RUN': '1'}), \
                 patch.object(update, 'fetch_posts', return_value=[POST, POST | {'id': '124'}]), \
                 patch.object(update, 'classify', return_value=[]):
                 self.assertEqual(update.main(), 0)
@@ -99,6 +100,51 @@ class PipelineTests(unittest.TestCase):
             with patch.object(update, 'DATA', path), patch.dict(update.os.environ, {}, clear=True):
                 self.assertEqual(update.main(), 0)
             self.assertEqual(json.loads(path.read_text())['status'], 'awaiting_configuration')
+
+
+class OpenAIClassifierTests(unittest.TestCase):
+    def test_responses_api_extracts_text_and_reuses_validation(self):
+        response = {'status': 'completed', 'output': [
+            {'type': 'reasoning'}, {'type': 'message', 'content': [
+                {'type': 'output_text', 'text': json.dumps({'mentions': [ITEM]})}]}]}
+        with patch.object(update, 'request_json', return_value=response) as request:
+            result = update.classify(POST, 'test-key', 'test-model')
+        self.assertEqual(result[0]['ticker'], 'TEST')
+        self.assertEqual(request.call_args.args[0], 'https://api.openai.com/v1/responses')
+        self.assertFalse(request.call_args.args[2]['store'])
+
+    def test_incomplete_response_rejected(self):
+        with patch.object(update, 'request_json', return_value={'status': 'incomplete'}):
+            with self.assertRaises(ValueError):
+                update.classify(POST, 'test-key', 'test-model')
+
+    def test_codex_environment_excludes_provider_secrets(self):
+        with patch.dict(update.os.environ, {'X_BEARER_TOKEN': 'secret', 'OPENAI_API_KEY': 'secret',
+                        'CODEX_API_KEY': 'secret', 'GH_TOKEN': 'secret', 'PATH': 'test'}, clear=True):
+            self.assertEqual(update.codex_environment(), {'PATH': 'test'})
+
+    def test_codex_refuses_github_ci(self):
+        with patch.dict(update.os.environ, {'GITHUB_ACTIONS': 'true'}):
+            with self.assertRaises(RuntimeError):
+                update.check_codex_login()
+
+    def test_codex_refuses_api_key_login(self):
+        with patch.dict(update.os.environ, {}, clear=True), patch.object(update, 'codex_command', return_value=['codex']), \
+             patch.object(update.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, 'Logged in using an API key', '')):
+            with self.assertRaises(RuntimeError):
+                update.check_codex_login()
+
+    def test_codex_output_validated_without_api_fallback(self):
+        def run(args, **kwargs):
+            path = Path(args[args.index('--output-last-message') + 1])
+            path.write_text(json.dumps({'mentions': [ITEM]}))
+            self.assertIn('forced_login_method="chatgpt"', args)
+            self.assertIn('features.shell_tool=false', args)
+            return subprocess.CompletedProcess(args, 0, '', '')
+        with patch.object(update, 'codex_command', return_value=['codex']), \
+             patch.object(update.subprocess, 'run', side_effect=run), patch.object(update, 'request_json') as api:
+            self.assertEqual(update.classify_codex(POST)[0]['ticker'], 'TEST')
+            api.assert_not_called()
 
 
 if __name__ == '__main__':

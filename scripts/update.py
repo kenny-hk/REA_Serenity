@@ -7,7 +7,10 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -111,17 +114,64 @@ def validate_mentions(payload, post):
 
 
 def classify(post, key, model):
+    """Explicit API mode. Never used as a fallback for subscription mode."""
     text = post.get('note_post', {}).get('text') or post.get('note_tweet', {}).get('text') or post['text']
-    result = request_json('https://api.anthropic.com/v1/messages', {
-        'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json'
-    }, {'model': model, 'max_tokens': 4096, 'system': PROMPT,
-        'messages': [{'role': 'user', 'content': json.dumps({'post_text': text}, ensure_ascii=False)}]})
-    if result.get('stop_reason') != 'end_turn':
+    result = request_json('https://api.openai.com/v1/responses', {
+        'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'
+    }, {'model': model, 'max_output_tokens': 4096, 'instructions': PROMPT, 'store': False,
+        'input': [{'role': 'user', 'content': json.dumps({'post_text': text}, ensure_ascii=False)}],
+        'text': {'format': {'type': 'json_schema', 'name': 'stock_mentions', 'strict': True,
+                            'schema': json.loads((ROOT / 'scripts/mentions.schema.json').read_text())}}})
+    if result.get('status') != 'completed':
         raise ValueError('Classifier response incomplete')
-    output = ''.join(b.get('text', '') for b in result['content'] if b['type'] == 'text').strip()
-    if output.startswith('```'):
-        output = re.sub(r'^```(?:json)?\s*|\s*```$', '', output)
+    output = ''.join(part['text'] for item in result.get('output', []) if item.get('type') == 'message'
+                     for part in item.get('content', []) if part.get('type') == 'output_text')
     return validate_mentions(json.loads(output), post)
+
+
+def codex_environment():
+    # Do not pass the X/GitHub/API secrets to the classifier process.
+    allowed = {'PATH', 'PATHEXT', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'TMPDIR',
+               'HOME', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA', 'CODEX_HOME',
+               'LANG', 'LC_ALL', 'COMSPEC'}
+    return {k: v for k, v in os.environ.items() if k.upper() in allowed}
+
+
+def codex_command():
+    binary = os.getenv('CODEX_BINARY') or shutil.which('codex')
+    if not binary:
+        raise RuntimeError('Codex CLI not found; install it and sign in with ChatGPT')
+    return [binary]
+
+
+def check_codex_login():
+    if os.getenv('GITHUB_ACTIONS') == 'true':
+        raise RuntimeError('Subscription classifier is local-only; do not import account auth into public CI')
+    result = subprocess.run(codex_command() + ['login', 'status'], capture_output=True,
+                            text=True, encoding='utf-8', timeout=30, env=codex_environment())
+    if result.returncode or 'chatgpt' not in (result.stdout + result.stderr).lower():
+        raise RuntimeError('Run codex login and choose ChatGPT; API-key login is not accepted in subscription mode')
+
+
+def classify_codex(post, model=''):
+    text = post.get('note_post', {}).get('text') or post.get('note_tweet', {}).get('text') or post['text']
+    with tempfile.TemporaryDirectory(prefix='serenity-classifier-') as directory:
+        output = Path(directory) / 'result.json'
+        args = codex_command() + ['exec', '--ignore-user-config', '--ephemeral', '--skip-git-repo-check',
+            '--sandbox', 'read-only', '-c', 'forced_login_method="chatgpt"',
+            '-c', 'features.shell_tool=false', '-c', 'web_search="disabled"',
+            '-c', 'apps._default.enabled=false', '-c', 'approval_policy="never"',
+            '--output-schema', str(ROOT / 'scripts/mentions.schema.json'),
+            '--output-last-message', str(output), '--cd', directory]
+        if model:
+            args.extend(['--model', model])
+        args.append('-')
+        prompt = PROMPT + '\nDo not use tools. Classify only the JSON post below.\n' + json.dumps({'post_text': text}, ensure_ascii=False)
+        result = subprocess.run(args, input=prompt, capture_output=True, text=True, encoding='utf-8',
+                                timeout=180, env=codex_environment())
+        if result.returncode or not output.exists():
+            raise RuntimeError('Codex classification failed; no API fallback was attempted')
+        return validate_mentions(json.loads(output.read_text(encoding='utf-8')), post)
 
 
 def merge(state, posts, mentions, timestamp, model):
@@ -148,13 +198,19 @@ def save(state):
 
 def main():
     state = json.loads(DATA.read_text(encoding='utf-8'))
-    token, key, model = (os.getenv(k) for k in ('X_BEARER_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_MODEL'))
-    if not all((token, key, model)):
+    provider = os.getenv('CLASSIFIER_PROVIDER', 'codex')
+    token, key, model = (os.getenv(k, '') for k in ('X_BEARER_TOKEN', 'OPENAI_API_KEY', 'OPENAI_MODEL'))
+    if provider not in ('codex', 'openai'):
+        print('CLASSIFIER_PROVIDER must be codex or openai.', file=sys.stderr)
+        return 1
+    if not token or (provider == 'openai' and not all((key, model))):
         state.update(status='awaiting_configuration', last_attempt=now())
         save(state)
-        print('Collection pending: configure X_BEARER_TOKEN, ANTHROPIC_API_KEY and ANTHROPIC_MODEL.')
+        print('Collection pending: configure X_BEARER_TOKEN and the selected OpenAI authentication mode.')
         return 0
     try:
+        if provider == 'codex':
+            check_codex_login()
         posts = fetch_posts(state, token)
         limit = int(os.getenv('MAX_POSTS_PER_RUN', '100'))
         # Oldest first, so a budget cap never skips posts on the next run.
@@ -163,8 +219,8 @@ def main():
             raise ValueError('MAX_POSTS_PER_RUN must be positive')
         mentions = []
         for post in batch:
-            mentions.extend(classify(post, key, model))
-        updated = merge(state, batch, mentions, now(), model)
+            mentions.extend(classify_codex(post, model) if provider == 'codex' else classify(post, key, model))
+        updated = merge(state, batch, mentions, now(), f'{provider}:{model or "cli-default"}')
         updated['backlog'] = len(posts) - len(batch)
         save(updated)
         print(f'Checked {len(batch)} posts; extracted {len(mentions)} mentions; backlog {updated["backlog"]}.')

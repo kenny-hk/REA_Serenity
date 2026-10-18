@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mentions"],
+  "properties": {
+    "mentions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ticker", "company", "stance", "summary", "evidence", "risks"],
+        "properties": {
+          "ticker": {"type": "string"},
+          "company": {"type": "string"},
+          "stance": {"type": "string", "enum": ["bullish", "bearish", "neutral", "unclassified"]},
+          "summary": {"type": "string"},
+          "evidence": {"type": "string"},
+          "risks": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}
