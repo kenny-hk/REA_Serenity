@@ -59,7 +59,7 @@ def request_json(url, headers, body=None):
 def fetch_posts(state, token):
     headers = {'Authorization': f'Bearer {token}'}
     user = request_json(f'https://api.x.com/2/users/by/username/{ACCOUNT}', headers)['data']
-    params = {'max_results': 100, 'tweet.fields': 'created_at,note_tweet', 'exclude': 'retweets'}
+    params = {'max_results': 100, 'post.fields': 'created_at,note_post', 'exclude': 'retweets'}
     if state.get('since_id'):
         params['since_id'] = state['since_id']
     else:
@@ -78,7 +78,7 @@ def fetch_posts(state, token):
 
 
 def validate_mentions(payload, post):
-    text = post.get('note_tweet', {}).get('text') or post['text']
+    text = post.get('note_post', {}).get('text') or post.get('note_tweet', {}).get('text') or post['text']
     if not isinstance(payload, dict) or not isinstance(payload.get('mentions'), list):
         raise ValueError('Classifier output must contain a mentions array')
     result, seen = [], set()
@@ -111,7 +111,7 @@ def validate_mentions(payload, post):
 
 
 def classify(post, key, model):
-    text = post.get('note_tweet', {}).get('text') or post['text']
+    text = post.get('note_post', {}).get('text') or post.get('note_tweet', {}).get('text') or post['text']
     result = request_json('https://api.anthropic.com/v1/messages', {
         'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json'
     }, {'model': model, 'max_tokens': 4096, 'system': PROMPT,

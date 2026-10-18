@@ -37,8 +37,9 @@ class ValidationTests(unittest.TestCase):
                 update.validate_mentions({'mentions': [ITEM | change]}, POST)
 
     def test_long_post_text_used(self):
-        p = POST | {'text': 'truncated', 'note_tweet': {'text': POST['text']}}
-        self.assertEqual(len(update.validate_mentions({'mentions': [ITEM]}, p)), 1)
+        for field in ['note_post', 'note_tweet']:
+            p = POST | {'text': 'truncated', field: {'text': POST['text']}}
+            self.assertEqual(len(update.validate_mentions({'mentions': [ITEM]}, p)), 1)
 
     def test_no_mentions_is_valid(self):
         self.assertEqual(update.validate_mentions({'mentions': []}, POST), [])
